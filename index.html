@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>JarvisAI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/x-icon" href="logo.png">
+
+<script type="module">
+
+import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai@0.5.0";
+
+// ---- API KEY ----
+const API_KEY = "AIzaSyDfIURQg44G2kPK3GvpVfUsh2GlyCS1TvA"; // <--- Replace here
+const MODEL_NAME = "gemini-2.0-flash";
+
+const genAI = new GoogleGenerativeAI(API_KEY);
+const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
+// --- UI Elements ---
+const chatBox = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const historyBtn = document.getElementById("historyBtn");
+const historyPanel = document.getElementById("historyPanel");
+const newChatBtn = document.getElementById("newChatBtn");
+
+let currentChatId = null;
+let chats = JSON.parse(localStorage.getItem("jarvisChats") || "{}");
+
+// --- Helper functions ---
+function saveChats() {
+  localStorage.setItem("jarvisChats", JSON.stringify(chats));
+}
+
+function addMessage(text, who, typing=false) {
+  const div = document.createElement("div");
+  div.className = who === "user" ? "msg user" : "msg bot";
+  div.innerHTML = typing ? "" : text.replace(/\n/g, "<br>");
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  // Save to current chat
+  if (!currentChatId && who === "user") {
+    currentChatId = "chat_" + Date.now();
+    const chatTitle = text.slice(0, 25) || "New Chat";
+    chats[currentChatId] = { title: chatTitle, messages: [] };
+  }
+
+  if (!typing) {
+    chats[currentChatId].messages.push({ sender: who, text });
+    saveChats();
+  }
+
+  return div;
+}
+
+// --- Typing Animation ---
+async function typeMessage(div, text, delay=20) {
+  for (let i=0; i<text.length; i++) {
+    div.innerHTML += text[i] === "\n" ? "<br>" : text[i];
+    chatBox.scrollTop = chatBox.scrollHeight;
+    await new Promise(r => setTimeout(r, delay));
+  }
+  chats[currentChatId].messages.push({ sender: "bot", text });
+  saveChats();
+}
+
+function renderHistory() {
+  historyPanel.innerHTML = "";
+  for (const id in chats) {
+    const item = document.createElement("div");
+    item.className = "historyItem";
+    item.textContent = chats[id].title;
+    item.onclick = () => {
+      loadChat(id);
+      historyPanel.style.display = "none";
+    };
+    historyPanel.appendChild(item);
+  }
+}
+
+function loadChat(id) {
+  currentChatId = id;
+  chatBox.innerHTML = "";
+  chats[id].messages.forEach(m => addMessage(m.text, m.sender));
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = "";
+
+  addMessage(text, "user");
+  const botDiv = addMessage("", "bot", true); // placeholder for typing
+
+  try {
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text: `You are Jarvis, a professional AI assistant created by Faidul Islam. Respond concisely and helpfully.\nConversation so far:\n${getChatHistory()}\nUser: ${text}\nJarvis:` }] }]
+    });
+
+    const reply = result.response.text();
+    await typeMessage(botDiv, reply); // stream-like typing
+
+  } catch (err) {
+    botDiv.innerHTML = "";
+    addMessage("⚠️ Error: " + err.message, "bot");
+  }
+}
+
+function getChatHistory() {
+  if (!currentChatId) return "";
+  return chats[currentChatId].messages.map(m => `${m.sender === "user" ? "User" : "Jarvis"}: ${m.text}`).join("\n");
+}
+
+// --- Event listeners ---
+sendBtn.onclick = sendMessage;
+inputEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+historyBtn.onclick = () => {
+  historyPanel.style.display = historyPanel.style.display === "block" ? "none" : "block";
+  renderHistory();
+};
+
+newChatBtn.onclick = () => {
+  currentChatId = null;
+  chatBox.innerHTML = "";
+};
+
+</script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0c0c0c;
+  color: white;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+#topBar {
+  display: flex;
+  justify-content: space-between;
+  background: #111;
+  padding: 10px;
+}
+#topBar button {
+  background: #3d3d3d;
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+.msg {
+  padding: 10px 15px;
+  margin: 6px 0;
+  border-radius: 10px;
+  max-width: 75%;
+  line-height: 1.4;
+}
+.user {
+  background: #1e1e1e;
+  margin-left: auto;
+}
+.bot {
+  background: #111;
+  color: white;
+  border-left: 3px solid #3d3d3d;
+}
+#inputRow {
+  display: flex;
+  padding: 10px;
+  background: #111;
+  gap: 10px;
+}
+#input {
+  flex: 1;
+  background: #1a1a1a;
+  border: none;
+  padding: 12px;
+  color: white;
+  border-radius: 8px;
+}
+#send {
+  padding: 12px 20px;
+  background: #3d3d3d;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#historyPanel {
+  display: none;
+  position: absolute;
+  top: 50px;
+  left: 10px;
+  background: #111;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+  min-width: 140px;
+  z-index: 10;
+}
+.historyItem {
+  padding: 8px 10px;
+  border-bottom: 1px solid #3d3d3d;
+  cursor: pointer;
+}
+.historyItem:hover {
+  background: #222;
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+  <div id="topBar">
+    <button id="newChatBtn">New Chat</button>
+    <button id="historyBtn">History</button>
+  </div>
+  <div id="chat"></div>
+  <div id="inputRow">
+    <textarea id="input" placeholder="Ask Jarvis..."></textarea>
+    <button id="send">Send</button>
+  </div>
+  <div id="historyPanel"></div>
+</div>
+</body>
+</html>
