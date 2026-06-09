@@ -12,8 +12,8 @@ import { generateText } from 'ai';
 import { deepinfra } from '@ai-sdk/deepinfra';
 
 // ---- API KEY ----
-const API_KEY = "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"; // <--- Replace here
-const MODEL_NAME = "Meta-Llama-3.3-70B-Instruct";
+const API_KEY = "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"; // <--- Replace here
+const MODEL_NAME = "openai/gpt-oss-120b:free";
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 const model = genAI.getGenerativeModel({ model: MODEL_NAME });
